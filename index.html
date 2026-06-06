@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Bedsitter Finder – Rent rooms, bedsitters & apartments</title>
+  <!-- Tailwind + Font Awesome + Leaflet (Map) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .transition-fast { transition: all 0.2s ease; }
+    .modal-backdrop {
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+    }
+    .property-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 25px -12px rgba(0,0,0,0.15);
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 antialiased">
+
+  <!-- Navbar -->
+  <nav class="bg-white shadow-sm sticky top-0 z-40 border-b">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center space-x-2">
+          <i class="fas fa-home text-2xl text-indigo-600"></i>
+          <span class="font-bold text-xl tracking-tight">Bedsitter<span class="text-indigo-600">Finder</span></span>
+        </div>
+        <div class="hidden md:flex space-x-6 text-sm font-medium">
+          <a href="#" class="text-gray-700 hover:text-indigo-600">Rent</a>
+          <a href="#" class="text-gray-700 hover:text-indigo-600">List property</a>
+          <a href="#" class="text-gray-700 hover:text-indigo-600">Saved</a>
+          <a href="#" class="text-gray-700 hover:text-indigo-600">Messages</a>
+        </div>
+        <div class="flex items-center space-x-3">
+          <button class="text-gray-600 hover:text-indigo-600"><i class="far fa-heart text-xl"></i></button>
+          <button class="bg-indigo-600 text-white px-4 py-2 rounded-full text-sm font-semibold shadow-sm hover:bg-indigo-700 transition">Sign In</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero + Search bar -->
+  <section class="bg-gradient-to-r from-indigo-900 to-purple-800 text-white py-12 px-4">
+    <div class="max-w-6xl mx-auto text-center">
+      <h1 class="text-3xl md:text-5xl font-bold mb-4">Find your perfect space 🏠</h1>
+      <p class="text-indigo-100 text-lg mb-8">Bedsitters, single rooms, hostels & affordable apartments across Kenya</p>
+      <div class="bg-white rounded-2xl shadow-xl p-2 flex flex-wrap md:flex-nowrap gap-2 max-w-3xl mx-auto">
+        <input type="text" id="searchInput" placeholder="Search by location, estate or property name..." class="flex-1 px-5 py-3 text-gray-700 rounded-full focus:outline-none">
+        <button id="searchBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full font-semibold transition"><i class="fas fa-search mr-2"></i>Search</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Filter toggles (mobile) + advanced filters bar -->
+    <div class="flex flex-wrap justify-between items-center mb-6 gap-3">
+      <button id="toggleFiltersBtn" class="md:hidden bg-white border border-gray-300 rounded-full px-4 py-2 text-sm font-medium shadow-sm"><i class="fas fa-sliders-h mr-2"></i>Filters</button>
+      <div class="flex flex-wrap gap-2 text-sm">
+        <span class="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-sm font-medium">✨ AI recommendations</span>
+        <span class="bg-white border rounded-full px-3 py-1 text-gray-600"><i class="fas fa-map-marker-alt mr-1"></i> Nairobi</span>
+        <span class="bg-white border rounded-full px-3 py-1 text-gray-600"><i class="fas fa-wifi mr-1"></i> WiFi included</span>
+      </div>
+    </div>
+
+    <div class="flex flex-col md:flex-row gap-8">
+      <!-- SIDEBAR FILTERS (advanced) -->
+      <aside id="filtersSidebar" class="md:w-80 bg-white rounded-2xl shadow-sm p-5 h-fit sticky top-24 transition-all duration-300 hidden md:block">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-bold text-lg">Filters</h3>
+          <button id="clearFilters" class="text-sm text-indigo-600 hover:underline">Clear all</button>
+        </div>
+        
+        <div class="space-y-5">
+          <div>
+            <label class="block text-sm font-medium mb-1">Price range (KES/month)</label>
+            <div class="flex gap-3">
+              <input type="number" id="minPrice" placeholder="Min" class="w-full border rounded-lg px-3 py-2 text-sm">
+              <input type="number" id="maxPrice" placeholder="Max" class="w-full border rounded-lg px-3 py-2 text-sm">
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Property type</label>
+            <div class="space-y-2" id="propertyTypeFilters">
+              <label class="flex items-center"><input type="checkbox" value="Bedsitter" class="mr-2 filter-check"> Bedsitter</label>
+              <label class="flex items-center"><input type="checkbox" value="Single Room" class="mr-2 filter-check"> Single Room</label>
+              <label class="flex items-center"><input type="checkbox" value="Hostel" class="mr-2 filter-check"> Hostel</label>
+              <label class="flex items-center"><input type="checkbox" value="Apartment" class="mr-2 filter-check"> Apartment</label>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Amenities</label>
+            <div class="grid grid-cols-2 gap-2" id="amenitiesFilters">
+              <label class="flex items-center text-sm"><input type="checkbox" value="WiFi" class="mr-2 filter-amenity"> WiFi</label>
+              <label class="flex items-center text-sm"><input type="checkbox" value="Water" class="mr-2 filter-amenity"> Water</label>
+              <label class="flex items-center text-sm"><input type="checkbox" value="Security" class="mr-2 filter-amenity"> 24/7 Security</label>
+              <label class="flex items-center text-sm"><input type="checkbox" value="Parking" class="mr-2 filter-amenity"> Parking</label>
+              <label class="flex items-center text-sm"><input type="checkbox" value="Furnished" class="mr-2 filter-amenity"> Furnished</label>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Distance radius</label>
+            <select id="radiusFilter" class="w-full border rounded-lg px-3 py-2 text-sm">
+              <option value="0">Any distance</option>
+              <option value="5">Within 5 km</option>
+              <option value="10">Within 10 km</option>
+              <option value="20">Within 20 km</option>
+            </select>
+          </div>
+          <button id="applyFilters" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold mt-3 hover:bg-indigo-700">Apply filters</button>
+        </div>
+        <div class="mt-6 pt-4 border-t text-xs text-gray-400">
+          <i class="fas fa-robot mr-1"></i> AI smart price estimation & fraud detection active
+        </div>
+      </aside>
+
+      <!-- MAIN CONTENT: Map + Property Grid -->
+      <div class="flex-1">
+        <!-- Map Section -->
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden mb-8">
+          <div id="map" style="height: 380px; width: 100%;" class="z-10"></div>
+          <div class="p-3 text-xs text-gray-500 flex justify-between border-t">
+            <span><i class="fas fa-map-pin text-red-500 mr-1"></i> Live properties in Nairobi area</span>
+            <span><i class="fas fa-route"></i> Click on marker for details</span>
+          </div>
+        </div>
+
+        <!-- Results header -->
+        <div class="flex justify-between items-center mb-5 flex-wrap gap-2">
+          <h2 class="text-xl font-bold"><span id="resultCount">0</span> properties found</h2>
+          <div class="flex gap-2">
+            <button id="gridViewBtn" class="px-3 py-1 rounded-md bg-indigo-50 text-indigo-700"><i class="fas fa-th-large"></i></button>
+            <button id="listViewBtn" class="px-3 py-1 rounded-md bg-gray-100 text-gray-600"><i class="fas fa-list"></i></button>
+          </div>
+        </div>
+
+        <!-- Property cards grid/list container -->
+        <div id="propertiesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-all"></div>
+        
+        <!-- Pagination placeholder (static) -->
+        <div class="mt-10 flex justify-center">
+          <nav class="flex gap-2">
+            <button class="px-3 py-1 border rounded-md text-gray-500">Prev</button>
+            <button class="px-3 py-1 bg-indigo-600 text-white rounded-md">1</button>
+            <button class="px-3 py-1 border rounded-md">2</button>
+            <button class="px-3 py-1 border rounded-md">3</button>
+            <button class="px-3 py-1 border rounded-md">Next</button>
+          </nav>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Property Detail Modal (advanced) -->
+  <div id="propertyModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div class="modal-backdrop absolute inset-0" id="modalBackdrop"></div>
+    <div class="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto relative z-10 shadow-2xl transform transition-all">
+      <div class="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
+        <h3 id="modalTitle" class="font-bold text-xl">Property details</h3>
+        <button id="closeModalBtn" class="text-gray-500 hover:text-gray-700"><i class="fas fa-times text-2xl"></i></button>
+      </div>
+      <div id="modalContent" class="p-5"></div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- MOCK PROPERTIES (Advanced & realistic) ----------
+    const mockProperties = [
+      { id: 1, title: "Cozy Bedsitter in Kilimani", price: 12000, deposit: 5000, type: "Bedsitter", location: "Kilimani, Nairobi", lat: -1.2921, lng: 36.7892, amenities: ["WiFi","Water","Security"], images: ["https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg?auto=compress&cs=tinysrgb&w=400","https://images.pexels.com/photos/279746/pexels-photo-279746.jpeg?auto=compress&cs=tinysrgb&w=400"], landlord: "John M.", verified: true, desc: "Clean bedsitter with own bathroom, secure gate, near supermarkets and public transport." },
+      { id: 2, title: "Spacious Single Room - Westlands", price: 15000, deposit: 7000, type: "Single Room", location: "Westlands, Nairobi", lat: -1.2675, lng: 36.8033, amenities: ["Water","Security","Parking"], images: ["https://images.pexels.com/photos/1643383/pexels-photo-1643383.jpeg?auto=compress&cs=tinysrgb&w=400"], landlord: "Sarah K.", verified: true, desc: "Well-lit single room, shared kitchen, 24/7 cctv, walking distance to Sarit Centre." },
+      { id: 3, title: "Modern Hostel - Student friendly", price: 8000, deposit: 3000, type: "Hostel", location: "Ngara, Nairobi", lat: -1.2745, lng: 36.8276, amenities: ["WiFi","Water"], images: ["https://images.pexels.com/photos/2587054/pexels-photo-2587054.jpeg?auto=compress&cs=tinysrgb&w=400"], landlord: "Campus Nest", verified: false, desc: "Shared dormitory style hostel, 6 bed rooms, common lounge, ideal for students." },
+      { id: 4, title: "Affordable 1BR Apartment - Embakasi", price: 22000, deposit: 10000, type: "Apartment", location: "Embakasi, Nairobi", lat: -1.3301, lng: 36.9023, amenities: ["Water","Security","Parking","Furnished"], images: ["https://images.pexels.com/photos/280229/pexels-photo-280229.jpeg?auto=compress&cs=tinysrgb&w=400"], landlord: "Peter O.", verified: true, desc: "Spacious living area, private parking, near shopping mall." },
+      { id: 5, title: "Executive Bedsitter - Kilimani", price: 18500, deposit: 8000, type: "Bedsitter", location: "Kilimani, Nairobi", lat: -1.2901, lng: 36.7880, amenities: ["WiFi","Water","Security","Furnished"], images: ["https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg?auto=compress&cs=tinysrgb&w=400"], landlord: "Grace W.", verified: true, desc: "Fully furnished, modern ensuite, smart lock, close to Yaya Centre." },
+      { id: 6, title: "Single Room - Roysambu", price: 9500, deposit: 4000, type: "Single Room", location: "Roysambu, Nairobi", lat: -1.2179, lng: 36.8730, amenities: ["Water","Security"], images: ["https://images.pexels.com/photos/2092963/pexels-photo-2092963.jpeg?auto=compress&cs=tinysrgb&w=400"], landlord: "James M.", verified: false, desc: "Simple but cozy, near university and matatu stage." },
+      { id: 7, title: "Luxury Hostel - Kileleshwa", price: 14000, deposit: 6000, type: "Hostel", location: "Kileleshwa, Nairobi", lat: -1.2769, lng: 36.7845, amenities: ["WiFi","Water","Security","Parking"], images: ["https://images.pexels.com/photos/1743231/pexels-photo-1743231.jpeg?auto=compress&cs=tinysrgb&w=400"], landlord: "Prime Hostels", verified: true, desc: "Boutique hostel with private rooms, co-working area, rooftop." },
+      { id: 8, title: "2 Bed Apartment - Donholm", price: 30000, deposit: 15000, type: "Apartment", location: "Donholm, Nairobi", lat: -1.3128, lng: 36.8820, amenities: ["Water","Parking","Security"], images: ["https://images.pexels.com/photos/1029599/pexels-photo-1029599.jpeg?auto=compress&cs=tinysrgb&w=400"], landlord: "RentSmart Ltd", verified: true, desc: "Family friendly, gated community, kids play area." }
+    ];
+
+    let filteredProperties = [...mockProperties];
+    let favorites = new Set();
+    let currentView = 'grid'; // grid or list
+    let mapInstance = null;
+    let markersLayer = [];
+
+    // Helper: render property cards (grid/list)
+    function renderProperties() {
+      const container = document.getElementById('propertiesContainer');
+      if (!container) return;
+      document.getElementById('resultCount').innerText = filteredProperties.length;
+
+      if (filteredProperties.length === 0) {
+        container.innerHTML = `<div class="col-span-full text-center py-12 bg-white rounded-xl"><i class="fas fa-search text-gray-400 text-5xl mb-3"></i><p class="text-gray-500">No properties match your filters. Try adjusting criteria.</p></div>`;
+        return;
+      }
+
+      if (currentView === 'grid') {
+        container.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-all";
+      } else {
+        container.className = "flex flex-col gap-4 transition-all";
+      }
+
+      container.innerHTML = filteredProperties.map(prop => {
+        const isFav = favorites.has(prop.id);
+        const cardClass = currentView === 'grid' ? "bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-fast" : "bg-white rounded-xl overflow-hidden shadow-md flex flex-row";
+        const imgClass = currentView === 'grid' ? "h-48 w-full object-cover" : "h-32 w-32 object-cover";
+        const detailsClass = currentView === 'grid' ? "p-4" : "p-4 flex-1";
+
+        return `
+          <div class="${cardClass} property-card cursor-pointer" data-id="${prop.id}">
+            <div class="relative">
+              <img src="${prop.images[0]}" class="${imgClass}" alt="${prop.title}" onerror="this.src='https://placehold.co/400x300?text=Property+Image'">
+              <button class="favorite-btn absolute top-2 right-2 bg-white rounded-full p-1.5 shadow-md" data-id="${prop.id}">
+                <i class="${isFav ? 'fas fa-heart text-red-500' : 'far fa-heart text-gray-600'}"></i>
+              </button>
+            </div>
+            <div class="${detailsClass}">
+              <div class="flex justify-between items-start">
+                <div><h3 class="font-bold text-lg">${prop.title}</h3><p class="text-sm text-gray-500"><i class="fas fa-map-marker-alt mr-1"></i>${prop.location}</p></div>
+                <span class="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full">${prop.type}</span>
+              </div>
+              <div class="mt-2 flex items-center gap-2 flex-wrap">
+                <span class="font-bold text-indigo-700">KSh ${prop.price.toLocaleString()}/mo</span>
+                <span class="text-xs text-gray-400">Deposit: KSh ${prop.deposit.toLocaleString()}</span>
+                ${prop.verified ? '<span class="text-green-600 text-xs"><i class="fas fa-check-circle"></i> Verified</span>' : ''}
+              </div>
+              <div class="mt-2 flex gap-2 text-xs text-gray-500">
+                ${prop.amenities.slice(0,3).map(a => `<span><i class="fas fa-check-circle text-indigo-400 text-xs"></i> ${a}</span>`).join('')}
+              </div>
+              <div class="mt-3 flex justify-between items-center">
+                <button class="view-details-btn text-indigo-600 text-sm font-medium" data-id="${prop.id}">View details →</button>
+                <div class="flex gap-1 text-gray-400"><i class="fas fa-bed"></i> <span>${prop.type === 'Hostel' ? 'Shared' : 'Private'}</span></div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // attach favorite & view details events
+      document.querySelectorAll('.favorite-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = parseInt(btn.dataset.id);
+          if (favorites.has(id)) favorites.delete(id);
+          else favorites.add(id);
+          renderProperties(); // re-render to update heart icons
+          updateMapMarkers(); // update marker heart status
+        });
+      });
+      document.querySelectorAll('.view-details-btn, .property-card').forEach(el => {
+        el.addEventListener('click', (e) => {
+          if (e.target.closest('.favorite-btn')) return;
+          const card = el.closest('[data-id]');
+          if (card) {
+            const id = parseInt(card.dataset.id);
+            const property = mockProperties.find(p => p.id === id);
+            if (property) showPropertyModal(property);
+          }
+        });
+      });
+    }
+
+    // Modal with full details
+    function showPropertyModal(property) {
+      const modal = document.getElementById('propertyModal');
+      document.getElementById('modalTitle').innerText = property.title;
+      const amenitiesHtml = property.amenities.map(a => `<span class="bg-gray-100 px-3 py-1 rounded-full text-sm"><i class="fas fa-check text-green-500"></i> ${a}</span>`).join('');
+      document.getElementById('modalContent').innerHTML = `
+        <div class="space-y-4">
+          <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            ${property.images.map(img => `<img src="${img}" class="h-48 rounded-lg object-cover shadow-sm">`).join('')}
+          </div>
+          <div class="grid grid-cols-2 gap-4 text-sm">
+            <div><span class="font-semibold">💰 Rent:</span> KSh ${property.price.toLocaleString()}/month</div>
+            <div><span class="font-semibold">🏦 Deposit:</span> KSh ${property.deposit.toLocaleString()}</div>
+            <div><span class="font-semibold">📍 Location:</span> ${property.location}</div>
+            <div><span class="font-semibold">🏷️ Type:</span> ${property.type}</div>
+          </div>
+          <div><span class="font-semibold">📝 Description:</span> ${property.desc}</div>
+          <div><span class="font-semibold">✨ Amenities:</span> <div class="flex flex-wrap gap-2 mt-1">${amenitiesHtml}</div></div>
+          <div class="border-t pt-3 flex justify-between items-center">
+            <div><i class="fas fa-user-circle text-gray-400"></i> Landlord: ${property.landlord} ${property.verified ? '<span class="text-green-500 text-xs"><i class="fas fa-badge-check"></i> Verified</span>' : ''}</div>
+            <button class="bg-indigo-600 text-white px-5 py-2 rounded-full text-sm shadow-md hover:bg-indigo-700"><i class="fas fa-comment"></i> Contact landlord</button>
+          </div>
+          <div class="bg-blue-50 p-3 rounded-lg text-xs text-blue-800"><i class="fas fa-robot mr-1"></i> AI price estimate: KSh ${(property.price * (Math.random() * 0.1 + 0.95)).toFixed(0)} - KSh ${(property.price * 1.1).toFixed(0)}</div>
+        </div>
+      `;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    // Filter logic (advanced)
+    function filterProperties() {
+      const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
+      const minPrice = parseInt(document.getElementById('minPrice')?.value) || 0;
+      const maxPrice = parseInt(document.getElementById('maxPrice')?.value) || Infinity;
+      const selectedTypes = Array.from(document.querySelectorAll('#propertyTypeFilters input:checked')).map(cb => cb.value);
+      const selectedAmenities = Array.from(document.querySelectorAll('#amenitiesFilters input:checked')).map(cb => cb.value);
+      const radius = parseInt(document.getElementById('radiusFilter')?.value) || 0;
+      const centerLat = -1.286389; const centerLng = 36.817223; // Nairobi center
+
+      filteredProperties = mockProperties.filter(prop => {
+        if (searchTerm && !prop.title.toLowerCase().includes(searchTerm) && !prop.location.toLowerCase().includes(searchTerm)) return false;
+        if (prop.price < minPrice || prop.price > maxPrice) return false;
+        if (selectedTypes.length && !selectedTypes.includes(prop.type)) return false;
+        if (selectedAmenities.length && !selectedAmenities.every(am => prop.amenities.includes(am))) return false;
+        if (radius > 0) {
+          const distance = getDistanceFromLatLonInKm(centerLat, centerLng, prop.lat, prop.lng);
+          if (distance > radius) return false;
+        }
+        return true;
+      });
+      renderProperties();
+      updateMapMarkers();
+    }
+
+    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = deg2rad(lat2 - lat1);
+      const dLon = deg2rad(lon2 - lon1);
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+    function deg2rad(deg) { return deg * (Math.PI/180); }
+
+    // Map initialization & markers
+    function initMap() {
+      if (mapInstance) return;
+      mapInstance = L.map('map').setView([-1.286389, 36.817223], 12);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> & CartoDB' }).addTo(mapInstance);
+      updateMapMarkers();
+    }
+
+    function updateMapMarkers() {
+      if (!mapInstance) return;
+      markersLayer.forEach(marker => mapInstance.removeLayer(marker));
+      markersLayer = [];
+      filteredProperties.forEach(prop => {
+        const isFav = favorites.has(prop.id);
+        const markerHtml = `<div style="background:${isFav ? '#ef4444' : '#4f46e5'}; width: 28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; border:2px solid white; box-shadow:0 2px 5px rgba(0,0,0,0.2);"><i class="fas fa-home" style="font-size:14px;"></i></div>`;
+        const marker = L.marker([prop.lat, prop.lng], { icon: L.divIcon({ html: markerHtml, iconSize: [28,28], className: 'custom-marker' }) }).addTo(mapInstance);
+        marker.bindPopup(`
+          <b>${prop.title}</b><br>💰 KSh ${prop.price}/mo<br>📍 ${prop.location}<br>
+          <button class="text-indigo-600 text-xs font-semibold view-map-detail" data-id="${prop.id}">View details</button>
+        `);
+        marker.on('popupopen', () => {
+          document.querySelector('.view-map-detail')?.addEventListener('click', (e) => {
+            const propFound = mockProperties.find(p => p.id === parseInt(e.target.dataset.id));
+            if (propFound) showPropertyModal(propFound);
+          });
+        });
+        markersLayer.push(marker);
+      });
+    }
+
+    // Reset filters
+    function resetFilters() {
+      document.getElementById('minPrice').value = '';
+      document.getElementById('maxPrice').value = '';
+      document.getElementById('searchInput').value = '';
+      document.getElementById('radiusFilter').value = '0';
+      document.querySelectorAll('#propertyTypeFilters input').forEach(cb => cb.checked = false);
+      document.querySelectorAll('#amenitiesFilters input').forEach(cb => cb.checked = false);
+      filterProperties();
+    }
+
+    // Event listeners
+    document.getElementById('searchBtn')?.addEventListener('click', filterProperties);
+    document.getElementById('applyFilters')?.addEventListener('click', filterProperties);
+    document.getElementById('clearFilters')?.addEventListener('click', resetFilters);
+    document.getElementById('toggleFiltersBtn')?.addEventListener('click', () => {
+      const sidebar = document.getElementById('filtersSidebar');
+      sidebar.classList.toggle('hidden');
+    });
+    document.getElementById('gridViewBtn')?.addEventListener('click', () => { currentView = 'grid'; renderProperties(); });
+    document.getElementById('listViewBtn')?.addEventListener('click', () => { currentView = 'list'; renderProperties(); });
+    document.getElementById('closeModalBtn')?.addEventListener('click', () => {
+      document.getElementById('propertyModal').classList.add('hidden');
+    });
+    document.getElementById('modalBackdrop')?.addEventListener('click', () => {
+      document.getElementById('propertyModal').classList.add('hidden');
+    });
+    // init
+    filterProperties();
+    initMap();
+    // Responsive map resize
+    window.addEventListener('resize', () => { if(mapInstance) setTimeout(() => mapInstance.invalidateSize(), 100); });
+  </script>
+  <footer class="bg-white border-t mt-16 py-8 text-center text-gray-500 text-sm">
+    <div class="max-w-7xl mx-auto px-4">© 2025 Bedsitter Finder – AI-powered rental platform. Real-time fraud detection, secure booking, landlord verification.</div>
+  </footer>
+</body>
+</html>
